@@ -107,17 +107,45 @@ Text AI capabilities including chat completion, translation, transliteration, an
 
 ### Chat / Text Completion
 
-Sarvam's LLM API (`sarvam-m` model) for chat and text completion.
+Sarvam's LLM APIs for chat and text completion. Two models available:
+
+- **`sarvam-105b`** (Flagship) - Most capable model for complex reasoning, coding, and instruction following
+- **`sarvam-m`** - Efficient model for general chat
+
+#### sarvam-105b (Flagship Model)
+
+The flagship 105B parameter model with state-of-the-art performance on Hindi and Indian language benchmarks.
 
 ```bash
-# Simple chat
-python3 scripts/text_processing.py chat "What is the capital of India?"
+# Chat using sarvam-105b (default)
+python3 scripts/text_processing.py chat "Explain quantum computing in simple terms"
 
 # Chat with system context
-python3 scripts/text_processing.py chat "Tell me about AI" --system "You are a helpful AI assistant"
+python3 scripts/text_processing.py chat "Write a poem" --system "You are a creative poet"
 
 # Adjust temperature (0-2, lower = more focused)
 python3 scripts/text_processing.py chat "Creative story" --temperature 0.8
+```
+
+**Key Features**:
+- Best for complex reasoning, coding, and instruction following
+- Excellent Hindi and Indian language understanding
+- Supports 22 Indian languages + English
+- Large context window
+
+#### sarvam-m (Efficient Model)
+
+Efficient model for general chat and text completion.
+
+```bash
+# Simple chat
+python3 scripts/text_processing.py chat "What is the capital of India?" --model sarvam-m
+
+# Chat with system context
+python3 scripts/text_processing.py chat "Tell me about AI" --system "You are a helpful AI assistant" --model sarvam-m
+
+# Adjust temperature
+python3 scripts/text_processing.py chat "Creative story" --temperature 0.8 --model sarvam-m
 ```
 
 ### Translation
