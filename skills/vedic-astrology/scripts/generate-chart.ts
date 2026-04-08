@@ -69,16 +69,15 @@ function ensurePythonDeps() {
   for (const pkg of packages) {
     try {
       const pkgName = pkg.includes("git+") ? "flatlib" : pkg;
-      execSync(`python3 -c "import ${pkgName}"`, { stdio: "ignore" });
+      execSync(`python3.11 -c "import ${pkgName}"`, { stdio: "ignore" });
       console.log(`✅ ${pkgName} already installed`);
     } catch {
       console.log(`📦 Installing ${pkg.split("#")[0].split("/").pop()}...`);
       try {
-        execSync(`pip3 install ${pkg}`, { stdio: "inherit" });
+        execSync(`python3.11 -m pip install ${pkg}`, { stdio: "inherit" });
       } catch (error) {
-        console.error(`❌ Failed to install ${pkg}`);
-        console.error("   Try: pip3 install --user " + pkg);
-        process.exit(1);
+        console.error(`⚠️ Failed to install ${pkg}. Some features (like KP) may be unavailable.`);
+        console.error("   Try manually: python3.11 -m pip install --user " + pkg + " (or add --break-system-packages on MacOS/Linux)");
       }
     }
   }
@@ -91,7 +90,11 @@ function generateChart(args: Args): string {
 import json
 from datetime import datetime
 from jyotishganit import calculate_birth_chart, get_birth_chart_json
-from vedicastro import VedicHoroscopeData
+try:
+    from vedicastro.VedicAstro import VedicHoroscopeData
+    HAS_VEDICASTRO = True
+except ImportError:
+    HAS_VEDICASTRO = False
 
 # Parse input
 date_str = "${args.date} ${args.time}"
@@ -108,33 +111,51 @@ jg_chart = calculate_birth_chart(
     name="${args.name || ""}"
 )
 
+# Parse JS arguments for vedicastro
+year, month, day = map(int, "${args.date}".split('-'))
+hour, minute, second = map(int, "${args.time}".split(':'))
+tz_val = float(${args.tz})
+tz_hrs = int(tz_val)
+tz_mins = int((tz_val - tz_hrs) * 60)
+utc_str = f"{tz_hrs:+03d}:{tz_mins:02d}"
+
 # Generate VedicAstro chart (KP system)
 print("🔮 Computing KP significators...", flush=True)
-try:
-    va_data = VedicHoroscopeData(
-        date="${args.date}",
-        time="${args.time}",
-        lat=${args.lat},
-        lon=${args.lon},
-        tz=${args.tz}
-    )
-    va_chart = va_data.generate_chart()
-    
-    # Get KP data
-    planets_data = va_data.get_planets_data_from_chart(va_chart)
-    houses_data = va_data.get_houses_data_from_chart(va_chart)
-    planet_sigs = va_data.get_planet_wise_significators(va_chart)
-    house_sigs = va_data.get_house_wise_significators(va_chart)
-    
-    kp_data = {
-        "planets": planets_data.to_dict() if hasattr(planets_data, 'to_dict') else str(planets_data),
-        "houses": houses_data.to_dict() if hasattr(houses_data, 'to_dict') else str(houses_data),
-        "planet_significators": planet_sigs.to_dict() if hasattr(planet_sigs, 'to_dict') else str(planet_sigs),
-        "house_significators": house_sigs.to_dict() if hasattr(house_sigs, 'to_dict') else str(house_sigs)
-    }
-except Exception as e:
-    print(f"⚠️  KP data partially unavailable: {e}", flush=True)
-    kp_data = {"error": str(e)}
+if HAS_VEDICASTRO:
+    try:
+        va_data = VedicHoroscopeData(
+            year=year,
+            month=month,
+            day=day,
+            hour=hour,
+            minute=minute,
+            second=second,
+            utc=utc_str,
+            latitude=${args.lat},
+            longitude=${args.lon}
+        )
+        va_chart = va_data.generate_chart()
+        
+        # Get KP data
+        planets_data = va_data.get_planets_data_from_chart(va_chart)
+        houses_data = va_data.get_houses_data_from_chart(va_chart)
+        planet_sigs = va_data.get_planet_wise_significators(planets_data=planets_data, houses_data=houses_data)
+        house_sigs = va_data.get_house_wise_significators(planets_data=planets_data, houses_data=houses_data)
+        
+        kp_data = {
+            "planets": planets_data.to_dict() if hasattr(planets_data, 'to_dict') else str(planets_data),
+            "houses": houses_data.to_dict() if hasattr(houses_data, 'to_dict') else str(houses_data),
+            "planet_significators": planet_sigs.to_dict() if hasattr(planet_sigs, 'to_dict') else str(planet_sigs),
+            "house_significators": house_sigs.to_dict() if hasattr(house_sigs, 'to_dict') else str(house_sigs)
+        }
+    except Exception as e:
+        import traceback
+        err_msg = traceback.format_exc()
+        print(f"⚠️  KP data partially unavailable: {err_msg}", flush=True)
+        kp_data = {"error": err_msg}
+else:
+    print(f"⚠️  KP data unavailable because vedicastro could not be imported.", flush=True)
+    kp_data = {"error": "vedicastro not installed (requires Python 3.11+)"}
 
 # Combine data
 print("📝 Generating complete chart data...", flush=True)
@@ -151,7 +172,7 @@ print(json.dumps(combined, indent=2, default=str))
 `;
 
   try {
-    const output = execSync(`python3 -c '${pythonScript.replace(/'/g, "'\\''")}'`, {
+    const output = execSync(`python3.11 -c '${pythonScript.replace(/'/g, "'\\''")}'`, {
       encoding: "utf-8",
       maxBuffer: 10 * 1024 * 1024
     });
@@ -187,7 +208,7 @@ function main() {
   const chartData = generateChart(args);
   
   // Save to file
-  const outputDir = process.env.ASTRO_CHARTS_DIR || "/home/workspace/Charts";
+  const outputDir = process.env.ASTRO_CHARTS_DIR || "./Charts";
   if (!existsSync(outputDir)) {
     mkdirSync(outputDir, { recursive: true });
   }
@@ -206,8 +227,8 @@ function main() {
   console.log("   ✓ KP significators and sublords");
   console.log("   ✓ Planetary aspects");
   console.log("\n💡 Next steps:");
-  console.log(`   interpret-chart.ts --chart "${filename}" --focus career`);
-  console.log(`   analyze-dasha.ts --chart "${filename}"`);
+  console.log(`   bun scripts/interpret-chart.ts --chart "${filename}" --focus career`);
+  console.log(`   bun scripts/analyze-dasha.ts --chart "${filename}"`);
 }
 
 main();
